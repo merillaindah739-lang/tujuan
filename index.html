@@ -8,7 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 <style>
   :root{
     --paper:#FAFAF6;        /* background halaman */
@@ -323,6 +324,7 @@
 
   /* ---- Peta pemilih lokasi di form ---- */
   #pickMap{height:220px;border-radius:10px;border:1px solid var(--line);margin-top:8px}
+  .map-err{padding:28px 20px;color:var(--pink);font-size:14px;font-weight:500;line-height:1.7}
 
   /* ---- Mobile: form layar penuh + font 16px agar iOS tidak auto-zoom ---- */
   @media(max-width:640px){
@@ -501,7 +503,8 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>if (typeof L === "undefined") document.write('<script src="https:\/\/cdn.jsdelivr.net\/npm\/leaflet@1.9.4\/dist\/leaflet.min.js"><\/scr' + 'ipt>');</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 /* =========================================================
@@ -521,6 +524,7 @@ let session = null;
 let allPlaces = [];
 let filter = { q: "", cat: "", city: "", sort: "new" };
 let map = null, mapLayer = null, pinIcon = null;
+let currentView = "list";
 let editingId = null;          // null = tambah baru
 let existingPhotos = [];       // URL foto lama saat edit
 let newPhotoFiles = [];        // File baru yang akan diunggah
@@ -650,7 +654,7 @@ function render(){
     row.addEventListener("keydown", e => { if (e.key === "Enter") openDetail(p); });
     grid.appendChild(row);
   });
-  if ($("mapView").style.display !== "none") renderMap();
+  if (currentView === "map") renderMap();
 }
 
 /* ---------- Detail ---------- */
@@ -699,13 +703,13 @@ function renderDetailPhoto(p){
 function renderMap(){
   try {
     if (typeof L === "undefined") {
-      toast("Library peta gagal dimuat — cek koneksi internet atau adblock, lalu refresh.");
+      $("map").innerHTML = '<div class="map-err">⚠️ Library peta gagal dimuat.<br>Coba: matikan adblock untuk situs ini, cek koneksi, lalu refresh.</div>';
       return;
     }
     renderMapInner();
   } catch (err) {
     console.error(err);
-    toast("Peta error: " + (err.message || err));
+    $("map").innerHTML = '<div class="map-err">⚠️ Peta error: ' + esc(err.message || err) + '<br>Screenshot pesan ini ya.</div>';
   }
 }
 function renderMapInner(){
@@ -1012,10 +1016,12 @@ document.querySelectorAll("#catSeg button").forEach(b => b.addEventListener("cli
   render();
 }));
 $("viewGridBtn").addEventListener("click", () => {
+  currentView = "list";
   $("viewGridBtn").classList.add("active"); $("viewMapBtn").classList.remove("active");
   $("gridView").style.display = ""; $("mapView").style.display = "none";
 });
 $("viewMapBtn").addEventListener("click", () => {
+  currentView = "map";
   $("viewMapBtn").classList.add("active"); $("viewGridBtn").classList.remove("active");
   $("gridView").style.display = "none"; $("mapView").style.display = "";
   renderMap();
