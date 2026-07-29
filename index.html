@@ -1023,7 +1023,7 @@ $("viewGridBtn").addEventListener("click", () => {
 $("viewMapBtn").addEventListener("click", () => {
   currentView = "map";
   $("viewMapBtn").classList.add("active"); $("viewGridBtn").classList.remove("active");
-  $("gridView").style.display = "none"; $("mapView").style.display = "";
+  $("gridView").style.display = "none"; $("mapView").style.display = "block";
   renderMap();
 });
 
