@@ -258,11 +258,21 @@
   .field input,.field select,.field textarea{font-size:13.5px}
   .field label{font-size:12px}
   footer{font-size:12.5px}
+
+  /* ---- Tombol login kanan atas ---- */
+  header{position:relative}
+  .login-btn{
+    position:absolute;top:14px;right:20px;
+    font-size:12.5px;font-weight:500;color:var(--ink-soft);text-decoration:none;
+    border:1px solid var(--line);border-radius:999px;padding:6px 14px;background:var(--card);
+  }
+  .login-btn:hover{border-color:var(--green);color:var(--green)}
 </style>
 </head>
 <body>
 
 <header class="wrap">
+  <a href="#" id="loginLink" class="login-btn">Masuk pengelola</a>
   <div class="brand-row">
     <div class="brand">
       <h1>tujuan<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19 L17 7 M9 6 H18 V15" stroke="#F62477" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></h1>
@@ -314,7 +324,7 @@
 
 <footer class="wrap">
   <span>© <span id="year"></span> tujuan — diulas dari kunjungan langsung.</span>
-  <a href="#" id="loginLink">Masuk pengelola</a>
+  <span>© <span id="year"></span> tujuan — diulas dari kunjungan langsung.</span>
 </footer>
 
 <div class="adminbar" id="adminBar">
