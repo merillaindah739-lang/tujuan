@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tujuan — Tempat tujuanmu berikutnya</title>
+<meta name="description" content="Kurasi tempat wisata, kafe, dan kuliner dari berbagai kota — diulas jujur dari kunjungan langsung." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  :root{
+    --paper:#FAFAF6;        /* background halaman */
+    --card:#FFFFFF;         /* kartu */
+    --ink:#063B00;          /* hijau hutan — teks & elemen utama */
+    --ink-soft:#3E5A38;     /* teks sekunder */
+    --muted:#7C867A;        /* teks redup */
+    --green:#155D0E;        /* hover, link */
+    --green-soft:#E9F2E4;   /* latar badge */
+    --pink:#F62477;         /* aksen — panah, CTA, rating */
+    --pink-soft:#FDE4EF;    /* latar aksen lembut */
+    --line:#E5E4DC;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(6,59,0,.05), 0 6px 24px rgba(6,59,0,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Space Grotesk',sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--pink);color:#fff}
+
+  .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+
+  /* ---------- Header ---------- */
+  header{padding:52px 0 26px}
+  .brand-row{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .brand h1{
+    font-weight:700;font-size:clamp(38px,5.5vw,56px);
+    letter-spacing:-.03em;line-height:1;
+    display:inline-flex;align-items:baseline;gap:4px;
+  }
+  .brand h1 svg{width:.55em;height:.55em;transform:translateY(-.35em)}
+  .brand p{color:var(--ink-soft);margin-top:12px;max-width:520px;font-size:16px}
+  .stat-pill{
+    font-size:13px;font-weight:500;letter-spacing:.02em;
+    background:var(--ink);color:var(--paper);
+    border-radius:999px;padding:10px 18px;white-space:nowrap;user-select:none;
+  }
+  .stat-pill b{color:var(--pink)}
+
+  /* ---------- Toolbar ---------- */
+  .toolbar{position:sticky;top:0;z-index:40;background:rgba(250,250,246,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 0}
+  .toolbar-inner{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .search{
+    flex:1;min-width:180px;display:flex;align-items:center;gap:8px;
+    background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;
+  }
+  .search input{border:none;outline:none;background:transparent;font:inherit;width:100%;color:var(--ink)}
+  .seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .seg button{
+    border:none;background:transparent;font:inherit;font-weight:500;font-size:14px;
+    padding:9px 14px;cursor:pointer;color:var(--ink-soft);border-right:1px solid var(--line);
+  }
+  .seg button:last-child{border-right:none}
+  .seg button.active{background:var(--ink);color:#fff}
+  select.sortsel{
+    font:inherit;font-size:14px;background:var(--card);border:1px solid var(--line);
+    border-radius:12px;padding:9px 10px;color:var(--ink);cursor:pointer;
+  }
+  .chips{display:flex;gap:8px;overflow-x:auto;padding:12px 0 2px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{
+    font:inherit;font-size:13px;font-weight:500;letter-spacing:.01em;
+    background:var(--card);border:1px solid var(--line);border-radius:999px;
+    padding:6px 14px;cursor:pointer;color:var(--ink-soft);white-space:nowrap;flex:0 0 auto;
+  }
+  .chip:hover{border-color:var(--green);color:var(--green)}
+  .chip.active{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+
+  /* ---------- Grid kartu ---------- */
+  main{padding:28px 0 64px;min-height:50vh}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:22px}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;box-shadow:var(--shadow);cursor:pointer;position:relative;
+    transition:transform .18s ease, box-shadow .18s ease;
+    display:flex;flex-direction:column;
+  }
+  .card:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(6,59,0,.06),0 14px 34px rgba(6,59,0,.10)}
+  .card:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+  .card-photo{aspect-ratio:4/3;background:var(--green-soft);overflow:hidden;position:relative}
+  .card-photo img{width:100%;height:100%;object-fit:cover;display:block}
+  .card-photo .noimg{
+    width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:44px;color:var(--pink);opacity:.55;
+  }
+  .place-badge{
+    position:absolute;top:12px;right:12px;
+    font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink);background:rgba(255,255,255,.92);
+    border-radius:999px;padding:6px 12px;pointer-events:none;
+    display:flex;align-items:center;gap:5px;
+  }
+  .place-badge .arw{color:var(--pink);font-weight:700}
+  .card-body{padding:16px 18px 18px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .card-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+  .card h3{font-weight:700;font-size:19px;letter-spacing:-.02em}
+  .rating{font-size:13.5px;color:var(--pink);white-space:nowrap;font-weight:700}
+  .card-meta{display:flex;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);align-items:center}
+  .tag{background:var(--green-soft);color:var(--green);border-radius:999px;padding:2px 10px;font-weight:500}
+  .card-review{font-size:14.5px;color:var(--ink-soft);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .card-actions{display:flex;gap:8px;margin-top:auto;padding-top:10px}
+  .mini-btn{
+    font:inherit;font-size:12.5px;font-weight:500;border:1px solid var(--line);background:transparent;
+    border-radius:9px;padding:5px 10px;cursor:pointer;color:var(--ink-soft);
+  }
+  .mini-btn:hover{border-color:var(--ink);color:var(--ink)}
+  .mini-btn.danger:hover{border-color:var(--pink);color:var(--pink)}
+
+  .empty{text-align:center;padding:80px 20px;color:var(--muted)}
+  .empty h2{color:var(--ink);font-size:24px;font-weight:700;margin-bottom:8px}
+
+  /* ---------- Peta ---------- */
+  #mapView{display:none}
+  #map{height:70vh;border-radius:var(--radius);border:1px solid var(--line);box-shadow:var(--shadow)}
+  .leaflet-popup-content{font-family:'Space Grotesk',sans-serif}
+  .leaflet-popup-content b{font-size:15px}
+
+  /* ---------- Modal umum ---------- */
+  .modal{
+    position:fixed;inset:0;background:rgba(6,59,0,.45);backdrop-filter:blur(3px);
+    display:none;align-items:flex-start;justify-content:center;z-index:100;
+    padding:4vh 16px;overflow-y:auto;
+  }
+  .modal.open{display:flex}
+  .modal-box{
+    background:var(--card);border-radius:18px;max-width:640px;width:100%;
+    box-shadow:0 24px 64px rgba(6,59,0,.28);overflow:hidden;position:relative;
+    animation:pop .22s ease;
+  }
+  @keyframes pop{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion: reduce){
+    .modal-box{animation:none}
+    .card,.card:hover{transition:none;transform:none}
+  }
+  .modal-close{
+    position:absolute;top:12px;right:12px;z-index:5;
+    background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:999px;
+    width:34px;height:34px;font-size:16px;cursor:pointer;color:var(--ink);
+  }
+  .detail-photos{position:relative;background:var(--green-soft)}
+  .detail-photos img{width:100%;max-height:380px;object-fit:cover;display:block}
+  .ph-nav{
+    position:absolute;top:50%;transform:translateY(-50%);
+    background:rgba(6,59,0,.6);color:#fff;border:none;border-radius:999px;
+    width:34px;height:34px;cursor:pointer;font-size:15px;
+  }
+  .ph-prev{left:10px}.ph-next{right:10px}
+  .ph-count{
+    position:absolute;bottom:10px;right:12px;font-size:11px;font-weight:500;
+    background:rgba(6,59,0,.65);color:#fff;border-radius:999px;padding:3px 9px;
+  }
+  .detail-body{padding:22px 24px 26px}
+  .detail-body h2{font-size:27px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+  .detail-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:13.5px;margin-bottom:14px}
+  .detail-review{white-space:pre-wrap;color:var(--ink-soft);font-size:15.5px}
+  .detail-tips{
+    margin-top:16px;background:var(--pink-soft);border-radius:12px;padding:12px 14px;font-size:14px;color:#A81552;
+  }
+  .detail-tips b{display:block;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;color:var(--pink)}
+  .detail-links{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+  .btn{
+    font:inherit;font-weight:700;font-size:14.5px;border:none;border-radius:12px;
+    padding:11px 20px;cursor:pointer;background:var(--pink);color:#fff;text-decoration:none;display:inline-block;
+  }
+  .btn:hover{background:#DB1264}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .btn.ghost:hover{background:var(--green-soft);border-color:var(--green)}
+  .btn:disabled{opacity:.55;cursor:wait}
+
+  /* ---------- Form ---------- */
+  .form-body{padding:24px}
+  .form-body h2{font-size:23px;font-weight:700;margin-bottom:16px}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:560px){.frow{grid-template-columns:1fr}}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:12.5px;font-weight:700;letter-spacing:.02em;margin-bottom:5px;color:var(--ink-soft)}
+  .field input,.field select,.field textarea{
+    width:100%;font:inherit;font-size:14.5px;border:1px solid var(--line);border-radius:10px;
+    padding:9px 11px;background:#fff;color:var(--ink);outline:none;
+  }
+  .field textarea{min-height:110px;resize:vertical}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--pink)}
+  .hint{font-size:12px;color:var(--muted);margin-top:4px}
+  .photo-previews{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .photo-previews .pv{position:relative;width:74px;height:74px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .photo-previews img{width:100%;height:100%;object-fit:cover}
+  .pv button{
+    position:absolute;top:2px;right:2px;width:20px;height:20px;border:none;border-radius:999px;
+    background:rgba(6,59,0,.72);color:#fff;font-size:11px;cursor:pointer;line-height:1;
+  }
+  .form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+  .form-msg{font-size:13px;color:var(--pink);margin-top:10px;min-height:18px}
+
+  /* ---------- Footer & admin bar ---------- */
+  footer{border-top:1px solid var(--line);padding:26px 0 40px;color:var(--muted);font-size:13.5px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  footer a{color:var(--muted)}
+  .adminbar{position:fixed;bottom:20px;right:20px;z-index:60;display:none;gap:10px}
+  .adminbar.on{display:flex}
+  .fab{
+    background:var(--pink);color:#fff;border:none;border-radius:999px;
+    font:inherit;font-weight:700;font-size:14px;padding:13px 20px;cursor:pointer;
+    box-shadow:0 8px 24px rgba(246,36,119,.35);
+  }
+  .fab:hover{background:#DB1264}
+  .fab.secondary{background:var(--card);color:var(--ink);border:1px solid var(--line);box-shadow:0 8px 24px rgba(6,59,0,.15)}
+
+  .banner{
+    background:#FFF4E5;border:1px solid #F0D9B5;color:#8A5A00;border-radius:12px;
+    padding:12px 16px;margin:18px 0;font-size:14px;display:none;
+  }
+  .banner.show{display:block}
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;
+    background:var(--ink);color:var(--paper);border-radius:999px;padding:10px 20px;
+    font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s;
+  }
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <div class="brand-row">
+    <div class="brand">
+      <h1>tujuan<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19 L17 7 M9 6 H18 V15" stroke="#F62477" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></h1>
+      <p>Kurasi tempat wisata, kafe, dan kuliner dari berbagai kota — diulas jujur dari kunjungan langsung. Buat kamu yang lagi cari tujuan berikutnya.</p>
+    </div>
+    <div class="stat-pill" id="statPill">memuat…</div>
+  </div>
+  <div class="banner" id="configBanner">
+    ⚙️ Aplikasi belum terhubung ke database. Buka file <b>index.html</b> lalu isi <b>SUPABASE_URL</b> dan <b>SUPABASE_ANON_KEY</b> di bagian CONFIG.
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="wrap">
+    <div class="toolbar-inner">
+      <div class="search">
+        <span aria-hidden="true">🔍</span>
+        <input id="searchInput" type="search" placeholder="Cari tempat, kota, atau kata di ulasan…" aria-label="Cari tempat" />
+      </div>
+      <div class="seg" id="catSeg" role="group" aria-label="Filter kategori">
+        <button data-cat="" class="active">Semua</button>
+        <button data-cat="wisata">Wisata</button>
+        <button data-cat="kafe">Kafe</button>
+        <button data-cat="kuliner">Kuliner</button>
+      </div>
+      <select class="sortsel" id="sortSel" aria-label="Urutkan">
+        <option value="new">Terbaru</option>
+        <option value="rating">Rating tertinggi</option>
+        <option value="name">Nama A–Z</option>
+      </select>
+      <div class="seg" role="group" aria-label="Tampilan">
+        <button id="viewGridBtn" class="active">Daftar</button>
+        <button id="viewMapBtn">Peta</button>
+      </div>
+    </div>
+    <div class="chips" id="cityChips"></div>
+  </div>
+</div>
+
+<main class="wrap">
+  <div id="gridView"><div class="grid" id="grid"></div>
+    <div class="empty" id="emptyState" style="display:none">
+      <h2>Belum ada yang cocok</h2>
+      <p>Coba ganti kata kunci, kategori, atau kotanya.</p>
+    </div>
+  </div>
+  <div id="mapView"><div id="map"></div></div>
+</main>
+
+<footer class="wrap">
+  <span>© <span id="year"></span> tujuan — diulas dari kunjungan langsung.</span>
+  <a href="#" id="loginLink">Masuk pengelola</a>
+</footer>
+
+<div class="adminbar" id="adminBar">
+  <button class="fab secondary" id="logoutBtn">Keluar</button>
+  <button class="fab" id="addBtn">+ Tambah tempat</button>
+</div>
+
+<!-- Modal detail -->
+<div class="modal" id="detailModal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <button class="modal-close" data-close="detailModal" aria-label="Tutup">✕</button>
+    <div class="detail-photos" id="detailPhotos"></div>
+    <div class="detail-body">
+      <h2 id="dName"></h2>
+      <div class="detail-meta" id="dMeta"></div>
+      <div class="detail-review" id="dReview"></div>
+      <div class="detail-tips" id="dTips" style="display:none"><b>Tips dariku</b><span id="dTipsText"></span></div>
+      <div class="detail-links" id="dLinks"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal login -->
+<div class="modal" id="loginModal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <button class="modal-close" data-close="loginModal" aria-label="Tutup">✕</button>
+    <div class="form-body">
+      <h2>Masuk pengelola</h2>
+      <div class="field"><label for="loginEmail">Email</label><input id="loginEmail" type="email" autocomplete="email" /></div>
+      <div class="field"><label for="loginPass">Kata sandi</label><input id="loginPass" type="password" autocomplete="current-password" /></div>
+      <div class="form-msg" id="loginMsg"></div>
+      <div class="form-actions"><button class="btn" id="loginBtn">Masuk</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal form tambah/edit -->
+<div class="modal" id="formModal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <button class="modal-close" data-close="formModal" aria-label="Tutup">✕</button>
+    <div class="form-body">
+      <h2 id="formTitle">Tambah tempat</h2>
+      <div class="frow">
+        <div class="field"><label for="fName">Nama tempat *</label><input id="fName" /></div>
+        <div class="field"><label for="fCity">Kota *</label><input id="fCity" placeholder="mis. Madiun" /></div>
+      </div>
+      <div class="frow">
+        <div class="field"><label for="fCat">Kategori *</label>
+          <select id="fCat">
+            <option value="wisata">Wisata</option>
+            <option value="kafe">Kafe</option>
+            <option value="kuliner">Kuliner</option>
+          </select>
+        </div>
+        <div class="field"><label for="fRating">Rating (1–5) *</label>
+          <select id="fRating">
+            <option>5</option><option>4.5</option><option selected>4</option><option>3.5</option>
+            <option>3</option><option>2.5</option><option>2</option><option>1.5</option><option>1</option>
+          </select>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field"><label for="fPrice">Kisaran harga</label>
+          <select id="fPrice">
+            <option value="">— tidak diisi —</option>
+            <option value="$">$ · murah</option>
+            <option value="$$">$$ · sedang</option>
+            <option value="$$$">$$$ · lumayan</option>
+          </select>
+        </div>
+        <div class="field"><label for="fDate">Tanggal kunjungan</label><input id="fDate" type="date" /></div>
+      </div>
+      <div class="field"><label for="fReview">Ulasan *</label><textarea id="fReview" placeholder="Ceritakan pengalamanmu di sini…"></textarea></div>
+      <div class="field"><label for="fTips">Tips (opsional)</label><input id="fTips" placeholder="mis. Datang sebelum jam 9 biar sepi" /></div>
+      <div class="frow">
+        <div class="field"><label for="fLat">Latitude (opsional)</label><input id="fLat" inputmode="decimal" placeholder="-7.6298" /></div>
+        <div class="field"><label for="fLng">Longitude (opsional)</label><input id="fLng" inputmode="decimal" placeholder="111.5239" /></div>
+      </div>
+      <div class="hint" style="margin:-6px 0 12px">Koordinat dipakai untuk tampilan Peta. Ambil dari Google Maps: klik kanan lokasi → angka pertama = lat, kedua = lng.</div>
+      <div class="field">
+        <label for="fPhotos">Foto (bisa lebih dari satu)</label>
+        <input id="fPhotos" type="file" accept="image/*" multiple />
+        <div class="hint">Foto dikompres otomatis sebelum diunggah supaya hemat kuota penyimpanan.</div>
+        <div class="photo-previews" id="photoPreviews"></div>
+      </div>
+      <div class="field"><label><input type="checkbox" id="fPublished" checked style="width:auto;margin-right:6px" />Tampilkan ke publik</label></div>
+      <div class="form-msg" id="formMsg"></div>
+      <div class="form-actions">
+        <button class="btn ghost" data-close="formModal">Batal</button>
+        <button class="btn" id="saveBtn">Simpan</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+/* =========================================================
+   CONFIG — isi dua nilai ini dari dashboard Supabase kamu
+   (Project Settings → API)
+   ========================================================= */
+const CONFIG = {
+  SUPABASE_URL: "https://tgikfynxzfnukergrlbq.supabase.co",      // mis. https://xxxx.supabase.co
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRnaWtmeW54emZudWtlcmdybGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMTY2NTYsImV4cCI6MjEwMDg5MjY1Nn0.egPViZkV-kDPBBUNRcnszn7Qir7T3sK-gGXUMoL2ZPE",
+  BUCKET: "place-photos",
+  SITE_NAME: "Tujuan"
+};
+
+/* ---------- State ---------- */
+let sb = null;
+let session = null;
+let allPlaces = [];
+let filter = { q: "", cat: "", city: "", sort: "new" };
+let map = null, mapLayer = null, pinIcon = null;
+let editingId = null;          // null = tambah baru
+let existingPhotos = [];       // URL foto lama saat edit
+let newPhotoFiles = [];        // File baru yang akan diunggah
+let detailPhotoIdx = 0, detailPhotoList = [];
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const CAT_LABEL = { wisata: "Wisata", kafe: "Kafe", kuliner: "Kuliner" };
+
+function toast(msg){
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._tm);
+  t._tm = setTimeout(() => t.classList.remove("show"), 2600);
+}
+function openModal(id){ $(id).classList.add("open"); document.body.style.overflow = "hidden"; }
+function closeModal(id){ $(id).classList.remove("open"); document.body.style.overflow = ""; }
+document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => closeModal(b.dataset.close)));
+document.querySelectorAll(".modal").forEach(m => m.addEventListener("click", e => { if (e.target === m) closeModal(m.id); }));
+document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".modal.open").forEach(m => closeModal(m.id)); });
+
+/* ---------- Init ---------- */
+function init(){
+  $("year").textContent = new Date().getFullYear();
+  if (!CONFIG.SUPABASE_URL || CONFIG.SUPABASE_URL.startsWith("GANTI")) {
+    $("configBanner").classList.add("show");
+    $("statPill").textContent = "belum terhubung";
+    return;
+  }
+  sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  sb.auth.getSession().then(({ data }) => { session = data.session; renderAdminState(); loadPlaces(); });
+  sb.auth.onAuthStateChange((_ev, s) => { session = s; renderAdminState(); loadPlaces(); });
+}
+
+function renderAdminState(){
+  $("adminBar").classList.toggle("on", !!session);
+  $("loginLink").style.display = session ? "none" : "";
+}
+
+/* ---------- Data ---------- */
+async function loadPlaces(){
+  const { data, error } = await sb.from("places").select("*").order("created_at", { ascending: false });
+  if (error) { console.error(error); toast("Gagal memuat data: " + error.message); return; }
+  allPlaces = data || [];
+  buildCityChips();
+  render();
+  const cities = new Set(allPlaces.filter(p => p.is_published).map(p => p.city));
+  const pub = allPlaces.filter(p => p.is_published).length;
+  $("statPill").innerHTML = `<b>${pub}</b> tempat · <b>${cities.size}</b> kota`;
+}
+
+function buildCityChips(){
+  const counts = {};
+  allPlaces.forEach(p => { const c = (p.city || "").trim(); if (c) counts[c] = (counts[c] || 0) + 1; });
+  const cities = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  const el = $("cityChips");
+  el.innerHTML = "";
+  const mk = (label, val) => {
+    const b = document.createElement("button");
+    b.className = "chip" + ((filter.city === val) ? " active" : "");
+    b.textContent = label;
+    b.addEventListener("click", () => { filter.city = (filter.city === val) ? "" : val; buildCityChips(); render(); });
+    el.appendChild(b);
+  };
+  mk("Semua kota", "");
+  cities.forEach(c => mk(`${c} · ${counts[c]}`, c));
+}
+
+function filteredPlaces(){
+  let list = allPlaces.filter(p => session ? true : p.is_published);
+  if (filter.cat)  list = list.filter(p => p.category === filter.cat);
+  if (filter.city) list = list.filter(p => (p.city || "").trim() === filter.city);
+  if (filter.q) {
+    const q = filter.q.toLowerCase();
+    list = list.filter(p => [p.name, p.city, p.review, p.tips].join(" ").toLowerCase().includes(q));
+  }
+  if (filter.sort === "rating") list = [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  else if (filter.sort === "name") list = [...list].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  return list;
+}
+
+/* ---------- Render grid ---------- */
+function stars(r){
+  const full = Math.floor(r), half = (r - full) >= 0.5;
+  return "★".repeat(full) + (half ? "½" : "") + ` ${r}`;
+}
+function fmtDate(d){
+  if (!d) return "";
+  try { return new Date(d + "T00:00:00").toLocaleDateString("id-ID", { month: "short", year: "numeric" }); }
+  catch { return d; }
+}
+
+function render(){
+  const list = filteredPlaces();
+  const grid = $("grid");
+  grid.innerHTML = "";
+  $("emptyState").style.display = list.length ? "none" : "";
+  list.forEach(p => {
+    const photos = Array.isArray(p.photos) ? p.photos : [];
+    const card = document.createElement("article");
+    card.className = "card";
+    card.tabIndex = 0;
+    card.innerHTML = `
+      <div class="card-photo">
+        ${photos[0] ? `<img src="${esc(photos[0])}" alt="${esc(p.name)}" loading="lazy" />` : `<div class="noimg">↗</div>`}
+        <div class="place-badge"><span>${esc(p.city || "")}</span><span class="arw">↗</span></div>
+      </div>
+      <div class="card-body">
+        <div class="card-top">
+          <h3>${esc(p.name)}</h3>
+          <span class="rating">${stars(p.rating || 0)}</span>
+        </div>
+        <div class="card-meta">
+          <span class="tag">${esc(CAT_LABEL[p.category] || p.category)}</span>
+          ${p.price_range ? `<span>${esc(p.price_range)}</span>` : ""}
+          ${p.visit_date ? `<span>${esc(fmtDate(p.visit_date))}</span>` : ""}
+          ${!p.is_published ? `<span style="color:var(--pink)">● draf</span>` : ""}
+        </div>
+        <div class="card-review">${esc(p.review || "")}</div>
+        ${session ? `<div class="card-actions">
+            <button class="mini-btn" data-act="edit">Edit</button>
+            <button class="mini-btn danger" data-act="del">Hapus</button>
+          </div>` : ""}
+      </div>`;
+    card.addEventListener("click", e => {
+      const act = e.target.dataset && e.target.dataset.act;
+      if (act === "edit") { e.stopPropagation(); openForm(p); return; }
+      if (act === "del")  { e.stopPropagation(); deletePlace(p); return; }
+      openDetail(p);
+    });
+    card.addEventListener("keydown", e => { if (e.key === "Enter") openDetail(p); });
+    grid.appendChild(card);
+  });
+  if ($("mapView").style.display !== "none") renderMap();
+}
+
+/* ---------- Detail ---------- */
+function openDetail(p){
+  detailPhotoList = Array.isArray(p.photos) ? p.photos : [];
+  detailPhotoIdx = 0;
+  renderDetailPhoto(p);
+  $("dName").textContent = p.name;
+  $("dMeta").innerHTML = `
+    <span class="tag">${esc(CAT_LABEL[p.category] || p.category)}</span>
+    <span>${esc(p.city || "")}</span>
+    ${p.price_range ? `<span>· ${esc(p.price_range)}</span>` : ""}
+    <span>· <b style="color:var(--pink)">${stars(p.rating || 0)}</b></span>
+    ${p.visit_date ? `<span>· dikunjungi ${esc(fmtDate(p.visit_date))}</span>` : ""}`;
+  $("dReview").textContent = p.review || "";
+  const tips = (p.tips || "").trim();
+  $("dTips").style.display = tips ? "" : "none";
+  $("dTipsText").textContent = tips;
+  const gq = encodeURIComponent(`${p.name} ${p.city || ""}`);
+  const gmaps = (p.lat && p.lng)
+    ? `https://www.google.com/maps?q=${p.lat},${p.lng}`
+    : `https://www.google.com/maps/search/?api=1&query=${gq}`;
+  $("dLinks").innerHTML = `<a class="btn" href="${gmaps}" target="_blank" rel="noopener">Buka di Google Maps ↗</a>`;
+  openModal("detailModal");
+}
+function renderDetailPhoto(p){
+  const box = $("detailPhotos");
+  if (!detailPhotoList.length) { box.innerHTML = ""; return; }
+  box.innerHTML = `
+    <img src="${esc(detailPhotoList[detailPhotoIdx])}" alt="${esc(p.name)}" />
+    ${detailPhotoList.length > 1 ? `
+      <button class="ph-nav ph-prev" aria-label="Foto sebelumnya">‹</button>
+      <button class="ph-nav ph-next" aria-label="Foto berikutnya">›</button>
+      <span class="ph-count">${detailPhotoIdx + 1}/${detailPhotoList.length}</span>` : ""}`;
+  const prev = box.querySelector(".ph-prev"), next = box.querySelector(".ph-next");
+  if (prev) prev.addEventListener("click", () => { detailPhotoIdx = (detailPhotoIdx - 1 + detailPhotoList.length) % detailPhotoList.length; renderDetailPhoto(p); });
+  if (next) next.addEventListener("click", () => { detailPhotoIdx = (detailPhotoIdx + 1) % detailPhotoList.length; renderDetailPhoto(p); });
+}
+
+/* ---------- Peta ---------- */
+function renderMap(){
+  if (!map) {
+    map = L.map("map").setView([-2.5, 118], 5); // tengah Indonesia
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19, attribution: "© OpenStreetMap"
+    }).addTo(map);
+    mapLayer = L.layerGroup().addTo(map);
+    pinIcon = L.divIcon({
+      className: "",
+      html: '<div style="width:16px;height:16px;border-radius:50%;background:#F62477;border:3px solid #fff;box-shadow:0 1px 5px rgba(6,59,0,.45)"></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+  }
+  mapLayer.clearLayers();
+  const pts = filteredPlaces().filter(p => p.lat && p.lng);
+  pts.forEach(p => {
+    const m = L.marker([p.lat, p.lng], { icon: pinIcon }).addTo(mapLayer);
+    m.bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.city || "")} · ${stars(p.rating || 0)}`);
+  });
+  if (pts.length) map.fitBounds(pts.map(p => [p.lat, p.lng]), { padding: [40, 40], maxZoom: 13 });
+  setTimeout(() => map.invalidateSize(), 60);
+}
+
+/* ---------- Auth ---------- */
+$("loginLink").addEventListener("click", e => { e.preventDefault(); openModal("loginModal"); });
+$("loginBtn").addEventListener("click", async () => {
+  $("loginMsg").textContent = "";
+  const { error } = await sb.auth.signInWithPassword({
+    email: $("loginEmail").value.trim(),
+    password: $("loginPass").value
+  });
+  if (error) { $("loginMsg").textContent = "Gagal masuk: " + error.message; return; }
+  closeModal("loginModal");
+  toast("Berhasil masuk. Selamat mengelola!");
+});
+$("logoutBtn").addEventListener("click", async () => { await sb.auth.signOut(); toast("Sudah keluar."); });
+
+/* ---------- Form tambah/edit ---------- */
+$("addBtn").addEventListener("click", () => openForm(null));
+
+function openForm(p){
+  editingId = p ? p.id : null;
+  existingPhotos = p && Array.isArray(p.photos) ? [...p.photos] : [];
+  newPhotoFiles = [];
+  $("formTitle").textContent = p ? "Edit tempat" : "Tambah tempat";
+  $("fName").value = p ? p.name : "";
+  $("fCity").value = p ? p.city : "";
+  $("fCat").value = p ? p.category : "wisata";
+  $("fRating").value = p ? String(p.rating) : "4";
+  $("fPrice").value = p ? (p.price_range || "") : "";
+  $("fDate").value = p ? (p.visit_date || "") : "";
+  $("fReview").value = p ? (p.review || "") : "";
+  $("fTips").value = p ? (p.tips || "") : "";
+  $("fLat").value = p && p.lat != null ? p.lat : "";
+  $("fLng").value = p && p.lng != null ? p.lng : "";
+  $("fPublished").checked = p ? !!p.is_published : true;
+  $("fPhotos").value = "";
+  $("formMsg").textContent = "";
+  renderPhotoPreviews();
+  openModal("formModal");
+}
+
+$("fPhotos").addEventListener("change", () => {
+  newPhotoFiles = newPhotoFiles.concat(Array.from($("fPhotos").files));
+  $("fPhotos").value = "";
+  renderPhotoPreviews();
+});
+
+function renderPhotoPreviews(){
+  const box = $("photoPreviews");
+  box.innerHTML = "";
+  existingPhotos.forEach((url, i) => {
+    const d = document.createElement("div");
+    d.className = "pv";
+    d.innerHTML = `<img src="${esc(url)}" alt="" /><button title="Hapus foto">✕</button>`;
+    d.querySelector("button").addEventListener("click", () => { existingPhotos.splice(i, 1); renderPhotoPreviews(); });
+    box.appendChild(d);
+  });
+  newPhotoFiles.forEach((f, i) => {
+    const d = document.createElement("div");
+    d.className = "pv";
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(f);
+    const b = document.createElement("button");
+    b.textContent = "✕"; b.title = "Hapus foto";
+    b.addEventListener("click", () => { newPhotoFiles.splice(i, 1); renderPhotoPreviews(); });
+    d.appendChild(img); d.appendChild(b);
+    box.appendChild(d);
+  });
+}
+
+/* Kompres gambar di browser: maks 1600px sisi terpanjang, JPEG 80% */
+function compressImage(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1600;
+      let { width: w, height: h } = img;
+      if (Math.max(w, h) > MAX) {
+        const s = MAX / Math.max(w, h);
+        w = Math.round(w * s); h = Math.round(h * s);
+      }
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img, 0, 0, w, h);
+      cv.toBlob(b => b ? resolve(b) : reject(new Error("Kompresi gagal")), "image/jpeg", 0.8);
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => reject(new Error("File bukan gambar yang valid"));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function uploadPhotos(){
+  const urls = [];
+  for (const f of newPhotoFiles) {
+    const blob = await compressImage(f);
+    const path = `${crypto.randomUUID()}.jpg`;
+    const { error } = await sb.storage.from(CONFIG.BUCKET).upload(path, blob, { contentType: "image/jpeg" });
+    if (error) throw error;
+    const { data } = sb.storage.from(CONFIG.BUCKET).getPublicUrl(path);
+    urls.push(data.publicUrl);
+  }
+  return urls;
+}
+
+$("saveBtn").addEventListener("click", async () => {
+  const msg = $("formMsg");
+  msg.textContent = "";
+  const name = $("fName").value.trim();
+  const city = $("fCity").value.trim();
+  const review = $("fReview").value.trim();
+  if (!name || !city || !review) { msg.textContent = "Nama, kota, dan ulasan wajib diisi."; return; }
+  const lat = $("fLat").value.trim() ? parseFloat($("fLat").value) : null;
+  const lng = $("fLng").value.trim() ? parseFloat($("fLng").value) : null;
+  if (($("fLat").value.trim() && isNaN(lat)) || ($("fLng").value.trim() && isNaN(lng))) {
+    msg.textContent = "Latitude/longitude harus berupa angka (pakai titik, bukan koma)."; return;
+  }
+
+  const btn = $("saveBtn");
+  btn.disabled = true; btn.textContent = "Menyimpan…";
+  try {
+    const uploaded = await uploadPhotos();
+    const row = {
+      name, city,
+      category: $("fCat").value,
+      rating: parseFloat($("fRating").value),
+      price_range: $("fPrice").value || null,
+      visit_date: $("fDate").value || null,
+      review,
+      tips: $("fTips").value.trim() || null,
+      lat, lng,
+      photos: existingPhotos.concat(uploaded),
+      is_published: $("fPublished").checked
+    };
+    const q = editingId
+      ? sb.from("places").update(row).eq("id", editingId)
+      : sb.from("places").insert(row);
+    const { error } = await q;
+    if (error) throw error;
+    closeModal("formModal");
+    toast(editingId ? "Perubahan disimpan." : "Tempat baru ditambahkan!");
+    await loadPlaces();
+  } catch (err) {
+    console.error(err);
+    msg.textContent = "Gagal menyimpan: " + (err.message || err);
+  } finally {
+    btn.disabled = false; btn.textContent = "Simpan";
+  }
+});
+
+async function deletePlace(p){
+  if (!confirm(`Hapus "${p.name}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+  const { error } = await sb.from("places").delete().eq("id", p.id);
+  if (error) { toast("Gagal menghapus: " + error.message); return; }
+  toast("Tempat dihapus.");
+  await loadPlaces();
+}
+
+/* ---------- Filter events ---------- */
+$("searchInput").addEventListener("input", e => { filter.q = e.target.value.trim(); render(); });
+$("sortSel").addEventListener("change", e => { filter.sort = e.target.value; render(); });
+document.querySelectorAll("#catSeg button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#catSeg button").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  filter.cat = b.dataset.cat;
+  render();
+}));
+$("viewGridBtn").addEventListener("click", () => {
+  $("viewGridBtn").classList.add("active"); $("viewMapBtn").classList.remove("active");
+  $("gridView").style.display = ""; $("mapView").style.display = "none";
+});
+$("viewMapBtn").addEventListener("click", () => {
+  $("viewMapBtn").classList.add("active"); $("viewGridBtn").classList.remove("active");
+  $("gridView").style.display = "none"; $("mapView").style.display = "";
+  renderMap();
+});
+
+init();
+</script>
+</body>
+</html>
