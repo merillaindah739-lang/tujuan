@@ -444,7 +444,10 @@
         <div class="field"><label for="fLat">Latitude (opsional)</label><input id="fLat" inputmode="decimal" placeholder="-7.6298" /></div>
         <div class="field"><label for="fLng">Longitude (opsional)</label><input id="fLng" inputmode="decimal" placeholder="111.5239" /></div>
       </div>
-      <div class="hint" style="margin:-6px 0 12px">Koordinat dipakai untuk tampilan Peta. Ambil dari Google Maps: klik kanan lokasi → angka pertama = lat, kedua = lng.</div>
+      <div class="field" style="margin:-4px 0 12px">
+        <button type="button" class="btn ghost" id="gpsBtn" style="font-size:12.5px;padding:7px 12px">📍 Ambil dari lokasi saya (GPS)</button>
+        <div class="hint">Paling akurat dari HP saat sedang berada di tempatnya. Bisa juga manual: Google Maps → klik kanan lokasi → angka pertama = lat, kedua = lng.</div>
+      </div>
       <div class="field">
         <label for="fPhotos">Foto (bisa lebih dari satu)</label>
         <input id="fPhotos" type="file" accept="image/*" multiple />
@@ -733,6 +736,30 @@ $("logoutBtn").addEventListener("click", async () => { await sb.auth.signOut(); 
 
 /* ---------- Form tambah/edit ---------- */
 $("addBtn").addEventListener("click", () => openForm(null));
+
+$("gpsBtn").addEventListener("click", () => {
+  if (!navigator.geolocation) { $("formMsg").textContent = "Browser ini tidak mendukung GPS."; return; }
+  const b = $("gpsBtn");
+  b.disabled = true; b.textContent = "Mencari lokasi…";
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      $("fLat").value = pos.coords.latitude.toFixed(6);
+      $("fLng").value = pos.coords.longitude.toFixed(6);
+      b.disabled = false; b.textContent = "📍 Ambil dari lokasi saya (GPS)";
+      toast(`Lokasi terisi (akurasi ±${Math.round(pos.coords.accuracy)} m)`);
+    },
+    (err) => {
+      b.disabled = false; b.textContent = "📍 Ambil dari lokasi saya (GPS)";
+      const msgs = {
+        1: "Izin lokasi ditolak — izinkan akses lokasi untuk situs ini di browser.",
+        2: "Lokasi tidak tersedia saat ini.",
+        3: "Waktu habis mencari lokasi — coba lagi."
+      };
+      $("formMsg").textContent = msgs[err.code] || "Gagal mengambil lokasi.";
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+  );
+});
 
 function openForm(p){
   editingId = p ? p.id : null;
