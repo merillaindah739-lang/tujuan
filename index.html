@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
   :root{
     --paper:#FAFAF6;        /* background halaman */
@@ -391,7 +391,6 @@
 
 <footer class="wrap">
   <span>© <span id="year"></span> tujuan — diulas dari kunjungan langsung.</span>
-  <span>© <span id="year"></span> tujuan — diulas dari kunjungan langsung.</span>
 </footer>
 
 <div class="adminbar" id="adminBar">
@@ -502,7 +501,7 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 /* =========================================================
@@ -698,6 +697,18 @@ function renderDetailPhoto(p){
 
 /* ---------- Peta ---------- */
 function renderMap(){
+  try {
+    if (typeof L === "undefined") {
+      toast("Library peta gagal dimuat — cek koneksi internet atau adblock, lalu refresh.");
+      return;
+    }
+    renderMapInner();
+  } catch (err) {
+    console.error(err);
+    toast("Peta error: " + (err.message || err));
+  }
+}
+function renderMapInner(){
   if (!map) {
     map = L.map("map").setView([-2.5, 118], 5); // tengah Indonesia
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -791,6 +802,18 @@ async function updateLocStatus(){
 }
 
 function initPickMap(){
+  try {
+    if (typeof L === "undefined") {
+      $("locStatus").textContent = "Peta gagal dimuat — cek koneksi/adblock. Tempat tetap bisa disimpan tanpa titik lokasi.";
+      return;
+    }
+    initPickMapInner();
+  } catch (err) {
+    console.error(err);
+    $("locStatus").textContent = "Peta error: " + (err.message || err);
+  }
+}
+function initPickMapInner(){
   const hasPoint = formLat != null && formLng != null;
   const center = hasPoint ? [formLat, formLng] : [-7.6298, 111.5239];
   if (!pickMap) {
