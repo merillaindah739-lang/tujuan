@@ -291,6 +291,8 @@
   .map-pop{width:200px;font-family:'Space Grotesk',sans-serif}
   .map-pop-img{width:100%;height:110px;object-fit:cover;display:block}
   .map-pop-body{padding:10px 12px 12px}
+  .map-pop-tags{display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:11px;font-weight:500}
+  .map-pop-price{color:var(--muted)}
   .map-pop-name{font-weight:700;font-size:14px;color:var(--ink);line-height:1.3}
   .map-pop-meta{font-size:12px;color:var(--muted);margin:3px 0 9px}
   .map-pop-rating{color:var(--pink);font-weight:700}
@@ -303,6 +305,35 @@
   /* modal harus selalu di atas kontrol peta (leaflet pakai z-index tinggi) */
   .modal{z-index:2000}
   .toast{z-index:2100}
+
+  /* ---- Daftar ringkas ---- */
+  .grid{display:flex;flex-direction:column;gap:10px}
+  .row-item{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;
+    box-shadow:var(--shadow);
+  }
+  .row-item:hover{border-color:var(--green)}
+  .row-item:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+  .row-main{flex:1;min-width:0}
+  .row-name{font-weight:700;font-size:15px;color:var(--ink)}
+  .row-name .draf{color:var(--pink);font-size:11px;font-weight:500}
+  .row-sub{font-size:12.5px;color:var(--muted)}
+  .row-actions{display:flex;gap:6px;flex:0 0 auto}
+
+  /* ---- Peta pemilih lokasi di form ---- */
+  #pickMap{height:220px;border-radius:10px;border:1px solid var(--line);margin-top:8px}
+
+  /* ---- Mobile: form layar penuh + font 16px agar iOS tidak auto-zoom ---- */
+  @media(max-width:640px){
+    .modal{padding:0;align-items:stretch}
+    .modal-box{max-width:100%;width:100%;min-height:100dvh;border-radius:0}
+    .form-body{padding:16px}
+    .field input,.field select,.field textarea{font-size:16px}
+    .search input{font-size:16px}
+    #pickMap{height:200px}
+    #map{height:74dvh}
+  }
 </style>
 </head>
 <body>
@@ -408,6 +439,12 @@
     <button class="modal-close" data-close="formModal" aria-label="Tutup">✕</button>
     <div class="form-body">
       <h2 id="formTitle">Tambah tempat</h2>
+      <div class="field">
+        <label>Lokasi tempat</label>
+        <button type="button" class="btn ghost" id="gpsBtn" style="width:100%;font-size:13px;padding:9px 12px">📍 Deteksi lokasi saya sekarang</button>
+        <div id="pickMap"></div>
+        <div class="hint" id="locStatus">Belum ada titik — ketuk tombol di atas (saat berada di tempatnya), atau ketuk peta untuk memasang pin. Pin bisa digeser.</div>
+      </div>
       <div class="frow">
         <div class="field"><label for="fName">Nama tempat *</label><input id="fName" /></div>
         <div class="field"><label for="fCity">Kota *</label><input id="fCity" placeholder="mis. Madiun" /></div>
@@ -440,14 +477,6 @@
       </div>
       <div class="field"><label for="fReview">Ulasan *</label><textarea id="fReview" placeholder="Ceritakan pengalamanmu di sini…"></textarea></div>
       <div class="field"><label for="fTips">Tips (opsional)</label><input id="fTips" placeholder="mis. Datang sebelum jam 9 biar sepi" /></div>
-      <div class="frow">
-        <div class="field"><label for="fLat">Latitude (opsional)</label><input id="fLat" inputmode="decimal" placeholder="-7.6298" /></div>
-        <div class="field"><label for="fLng">Longitude (opsional)</label><input id="fLng" inputmode="decimal" placeholder="111.5239" /></div>
-      </div>
-      <div class="field" style="margin:-4px 0 12px">
-        <button type="button" class="btn ghost" id="gpsBtn" style="font-size:12.5px;padding:7px 12px">📍 Ambil dari lokasi saya (GPS)</button>
-        <div class="hint">Paling akurat dari HP saat sedang berada di tempatnya. Bisa juga manual: Google Maps → klik kanan lokasi → angka pertama = lat, kedua = lng.</div>
-      </div>
       <div class="field">
         <label for="fPhotos">Foto (bisa lebih dari satu)</label>
         <input id="fPhotos" type="file" accept="image/*" multiple />
@@ -499,6 +528,12 @@ let newPhotoFiles = [];        // File baru yang akan diunggah
 let existingMenuPhotos = [];   // URL foto menu lama saat edit
 let newMenuPhotoFiles = [];    // File foto menu baru
 let detailPhotoIdx = 0, detailPhotoList = [];
+let pickMap = null, pickMarker = null, formLat = null, formLng = null;
+const dotIcon = () => L.divIcon({
+  className: "",
+  html: '<div style="width:18px;height:18px;border-radius:50%;background:#F62477;border:3px solid #fff;box-shadow:0 1px 5px rgba(6,59,0,.45)"></div>',
+  iconSize: [18, 18], iconAnchor: [9, 9]
+});
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
@@ -594,41 +629,27 @@ function render(){
   grid.innerHTML = "";
   $("emptyState").style.display = list.length ? "none" : "";
   list.forEach(p => {
-    const photos = Array.isArray(p.photos) ? p.photos : [];
-    const card = document.createElement("article");
-    card.className = "card";
-    card.tabIndex = 0;
-    card.innerHTML = `
-      <div class="card-photo">
-        ${photos[0] ? `<img src="${esc(photos[0])}" alt="${esc(p.name)}" loading="lazy" />` : `<div class="noimg">↗</div>`}
-        <div class="place-badge"><span>${esc(p.city || "")}</span><span class="arw">↗</span></div>
+    const row = document.createElement("article");
+    row.className = "row-item";
+    row.tabIndex = 0;
+    row.innerHTML = `
+      <div class="row-main">
+        <div class="row-name">${esc(p.name)}${!p.is_published ? ` <span class="draf">● draf</span>` : ""}</div>
+        <div class="row-sub">${esc(p.city || "")} · ${esc(CAT_LABEL[p.category] || p.category)}${p.visit_date ? " · " + esc(fmtDate(p.visit_date)) : ""}</div>
       </div>
-      <div class="card-body">
-        <div class="card-top">
-          <h3>${esc(p.name)}</h3>
-          <span class="rating">${stars(p.rating || 0)}</span>
-        </div>
-        <div class="card-meta">
-          <span class="tag">${esc(CAT_LABEL[p.category] || p.category)}</span>
-          ${(Array.isArray(p.menu_photos) && p.menu_photos.length) || p.menu_list ? `<span class="tag menu-tag">menu</span>` : ""}
-          ${p.price_range ? `<span>${esc(p.price_range)}</span>` : ""}
-          ${p.visit_date ? `<span>${esc(fmtDate(p.visit_date))}</span>` : ""}
-          ${!p.is_published ? `<span style="color:var(--pink)">● draf</span>` : ""}
-        </div>
-        <div class="card-review">${esc(p.review || "")}</div>
-        ${session ? `<div class="card-actions">
-            <button class="mini-btn" data-act="edit">Edit</button>
-            <button class="mini-btn danger" data-act="del">Hapus</button>
-          </div>` : ""}
-      </div>`;
-    card.addEventListener("click", e => {
+      <span class="rating">${stars(p.rating || 0)}</span>
+      ${session ? `<span class="row-actions">
+          <button class="mini-btn" data-act="edit">Edit</button>
+          <button class="mini-btn danger" data-act="del">Hapus</button>
+        </span>` : ""}`;
+    row.addEventListener("click", e => {
       const act = e.target.dataset && e.target.dataset.act;
       if (act === "edit") { e.stopPropagation(); openForm(p); return; }
       if (act === "del")  { e.stopPropagation(); deletePlace(p); return; }
       openDetail(p);
     });
-    card.addEventListener("keydown", e => { if (e.key === "Enter") openDetail(p); });
-    grid.appendChild(card);
+    row.addEventListener("keydown", e => { if (e.key === "Enter") openDetail(p); });
+    grid.appendChild(row);
   });
   if ($("mapView").style.display !== "none") renderMap();
 }
@@ -702,10 +723,14 @@ function renderMap(){
         })
       : pinIcon;
     const m = L.marker([p.lat, p.lng], { icon }).addTo(mapLayer);
+    m.on("click", () => {
+      map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 16), { duration: 0.9 });
+    });
     m.bindPopup(`
       <div class="map-pop">
         ${photos[0] ? `<img class="map-pop-img" src="${esc(photos[0])}" alt="${esc(p.name)}" />` : ""}
         <div class="map-pop-body">
+          <div class="map-pop-tags"><span class="tag">${esc(CAT_LABEL[p.category] || p.category)}</span>${p.price_range ? `<span class="map-pop-price">${esc(p.price_range)}</span>` : ""}</div>
           <div class="map-pop-name">${esc(p.name)}</div>
           <div class="map-pop-meta">${esc(p.city || "")} · <span class="map-pop-rating">${stars(p.rating || 0)}</span></div>
           <button class="map-pop-btn" type="button">Lihat detail</button>
@@ -737,19 +762,61 @@ $("logoutBtn").addEventListener("click", async () => { await sb.auth.signOut(); 
 /* ---------- Form tambah/edit ---------- */
 $("addBtn").addEventListener("click", () => openForm(null));
 
+function setPickPoint(lat, lng, zoomTo){
+  formLat = lat; formLng = lng;
+  if (!pickMarker) {
+    pickMarker = L.marker([lat, lng], { draggable: true, icon: dotIcon() }).addTo(pickMap);
+    pickMarker.on("dragend", () => {
+      const ll = pickMarker.getLatLng();
+      formLat = ll.lat; formLng = ll.lng;
+      updateLocStatus();
+    });
+  } else pickMarker.setLatLng([lat, lng]);
+  if (zoomTo) pickMap.setView([lat, lng], Math.max(pickMap.getZoom(), 16));
+  updateLocStatus();
+}
+
+async function updateLocStatus(){
+  const el = $("locStatus");
+  if (formLat == null) { el.textContent = "Belum ada titik — ketuk tombol di atas, atau ketuk peta untuk memasang pin."; return; }
+  el.textContent = `📍 Titik terpasang (${formLat.toFixed(5)}, ${formLng.toFixed(5)}) — mencari nama alamat…`;
+  const lat = formLat, lng = formLng;
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);
+    const j = await r.json();
+    if (j && j.display_name && formLat === lat && formLng === lng) el.textContent = `📍 ${j.display_name}`;
+  } catch (_) {
+    el.textContent = `📍 Titik terpasang (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+  }
+}
+
+function initPickMap(){
+  const hasPoint = formLat != null && formLng != null;
+  const center = hasPoint ? [formLat, formLng] : [-7.6298, 111.5239];
+  if (!pickMap) {
+    pickMap = L.map("pickMap").setView(center, hasPoint ? 16 : 12);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(pickMap);
+    pickMap.on("click", e => setPickPoint(e.latlng.lat, e.latlng.lng, false));
+  } else {
+    pickMap.setView(center, hasPoint ? 16 : 12);
+  }
+  if (pickMarker) { pickMap.removeLayer(pickMarker); pickMarker = null; }
+  if (hasPoint) setPickPoint(formLat, formLng, false); else updateLocStatus();
+  setTimeout(() => pickMap.invalidateSize(), 150);
+}
+
 $("gpsBtn").addEventListener("click", () => {
   if (!navigator.geolocation) { $("formMsg").textContent = "Browser ini tidak mendukung GPS."; return; }
   const b = $("gpsBtn");
   b.disabled = true; b.textContent = "Mencari lokasi…";
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      $("fLat").value = pos.coords.latitude.toFixed(6);
-      $("fLng").value = pos.coords.longitude.toFixed(6);
-      b.disabled = false; b.textContent = "📍 Ambil dari lokasi saya (GPS)";
-      toast(`Lokasi terisi (akurasi ±${Math.round(pos.coords.accuracy)} m)`);
+      b.disabled = false; b.textContent = "📍 Deteksi lokasi saya sekarang";
+      setPickPoint(pos.coords.latitude, pos.coords.longitude, true);
+      toast(`Lokasi terdeteksi (akurasi ±${Math.round(pos.coords.accuracy)} m)`);
     },
     (err) => {
-      b.disabled = false; b.textContent = "📍 Ambil dari lokasi saya (GPS)";
+      b.disabled = false; b.textContent = "📍 Deteksi lokasi saya sekarang";
       const msgs = {
         1: "Izin lokasi ditolak — izinkan akses lokasi untuk situs ini di browser.",
         2: "Lokasi tidak tersedia saat ini.",
@@ -776,8 +843,8 @@ function openForm(p){
   $("fDate").value = p ? (p.visit_date || "") : "";
   $("fReview").value = p ? (p.review || "") : "";
   $("fTips").value = p ? (p.tips || "") : "";
-  $("fLat").value = p && p.lat != null ? p.lat : "";
-  $("fLng").value = p && p.lng != null ? p.lng : "";
+  formLat = p && p.lat != null ? p.lat : null;
+  formLng = p && p.lng != null ? p.lng : null;
   $("fPublished").checked = p ? !!p.is_published : true;
   $("fPhotos").value = "";
   $("fMenuPhotos").value = "";
@@ -786,6 +853,7 @@ function openForm(p){
   renderPhotoPreviews();
   renderMenuPreviews();
   openModal("formModal");
+  initPickMap();
 }
 
 $("fPhotos").addEventListener("change", () => {
@@ -866,11 +934,7 @@ $("saveBtn").addEventListener("click", async () => {
   const city = $("fCity").value.trim();
   const review = $("fReview").value.trim();
   if (!name || !city || !review) { msg.textContent = "Nama, kota, dan ulasan wajib diisi."; return; }
-  const lat = $("fLat").value.trim() ? parseFloat($("fLat").value) : null;
-  const lng = $("fLng").value.trim() ? parseFloat($("fLng").value) : null;
-  if (($("fLat").value.trim() && isNaN(lat)) || ($("fLng").value.trim() && isNaN(lng))) {
-    msg.textContent = "Latitude/longitude harus berupa angka (pakai titik, bukan koma)."; return;
-  }
+  const lat = formLat, lng = formLng;
 
   const btn = $("saveBtn");
   btn.disabled = true; btn.textContent = "Menyimpan…";
