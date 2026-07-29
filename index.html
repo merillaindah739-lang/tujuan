@@ -278,6 +278,31 @@
   #dMenuList:empty{display:none}
   #dMenuList li{margin:2px 0}
   .menu-tag{background:var(--pink-soft);color:var(--pink)}
+
+  /* ---- Peta: marker foto + kartu popup ---- */
+  .photo-pin{
+    width:46px;height:46px;border-radius:50%;overflow:hidden;
+    border:3px solid #fff;outline:2.5px solid var(--pink);
+    box-shadow:0 2px 8px rgba(6,59,0,.35);background:var(--green-soft);
+  }
+  .photo-pin img{width:100%;height:100%;object-fit:cover;display:block}
+  .leaflet-popup-content-wrapper{border-radius:12px;padding:0;overflow:hidden}
+  .leaflet-popup-content{margin:0;width:auto!important}
+  .map-pop{width:200px;font-family:'Space Grotesk',sans-serif}
+  .map-pop-img{width:100%;height:110px;object-fit:cover;display:block}
+  .map-pop-body{padding:10px 12px 12px}
+  .map-pop-name{font-weight:700;font-size:14px;color:var(--ink);line-height:1.3}
+  .map-pop-meta{font-size:12px;color:var(--muted);margin:3px 0 9px}
+  .map-pop-rating{color:var(--pink);font-weight:700}
+  .map-pop-btn{
+    font:inherit;font-size:12px;font-weight:700;width:100%;
+    background:var(--pink);color:#fff;border:none;border-radius:8px;
+    padding:6px 10px;cursor:pointer;
+  }
+  .map-pop-btn:hover{background:#DB1264}
+  /* modal harus selalu di atas kontrol peta (leaflet pakai z-index tinggi) */
+  .modal{z-index:2000}
+  .toast{z-index:2100}
 </style>
 </head>
 <body>
@@ -665,8 +690,28 @@ function renderMap(){
   mapLayer.clearLayers();
   const pts = filteredPlaces().filter(p => p.lat && p.lng);
   pts.forEach(p => {
-    const m = L.marker([p.lat, p.lng], { icon: pinIcon }).addTo(mapLayer);
-    m.bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.city || "")} · ${stars(p.rating || 0)}`);
+    const photos = Array.isArray(p.photos) ? p.photos : [];
+    const icon = photos[0]
+      ? L.divIcon({
+          className: "",
+          html: `<div class="photo-pin"><img src="${esc(photos[0])}" alt="" /></div>`,
+          iconSize: [46, 46], iconAnchor: [23, 23], popupAnchor: [0, -26]
+        })
+      : pinIcon;
+    const m = L.marker([p.lat, p.lng], { icon }).addTo(mapLayer);
+    m.bindPopup(`
+      <div class="map-pop">
+        ${photos[0] ? `<img class="map-pop-img" src="${esc(photos[0])}" alt="${esc(p.name)}" />` : ""}
+        <div class="map-pop-body">
+          <div class="map-pop-name">${esc(p.name)}</div>
+          <div class="map-pop-meta">${esc(p.city || "")} · <span class="map-pop-rating">${stars(p.rating || 0)}</span></div>
+          <button class="map-pop-btn" type="button">Lihat detail</button>
+        </div>
+      </div>`, { minWidth: 200, maxWidth: 220 });
+    m.on("popupopen", (e) => {
+      const btn = e.popup.getElement().querySelector(".map-pop-btn");
+      if (btn) btn.addEventListener("click", () => openDetail(p));
+    });
   });
   if (pts.length) map.fitBounds(pts.map(p => [p.lat, p.lng]), { padding: [40, 40], maxZoom: 13 });
   setTimeout(() => map.invalidateSize(), 60);
