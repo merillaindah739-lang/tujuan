@@ -267,6 +267,17 @@
     border:1px solid var(--line);border-radius:999px;padding:6px 14px;background:var(--card);
   }
   .login-btn:hover{border-color:var(--green);color:var(--green)}
+
+  /* ---- Fitur Menu ---- */
+  .detail-menu{margin-top:16px;background:var(--green-soft);border-radius:12px;padding:12px 14px}
+  .detail-menu > b{display:block;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;color:var(--green)}
+  .menu-photos{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .menu-photos:empty{display:none}
+  .menu-photos img{width:86px;height:86px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
+  #dMenuList{margin:0;padding-left:18px;font-size:13.5px;color:var(--ink-soft)}
+  #dMenuList:empty{display:none}
+  #dMenuList li{margin:2px 0}
+  .menu-tag{background:var(--pink-soft);color:var(--pink)}
 </style>
 </head>
 <body>
@@ -342,6 +353,11 @@
       <div class="detail-meta" id="dMeta"></div>
       <div class="detail-review" id="dReview"></div>
       <div class="detail-tips" id="dTips" style="display:none"><b>Tips dariku</b><span id="dTipsText"></span></div>
+      <div class="detail-menu" id="dMenu" style="display:none">
+        <b>Menu</b>
+        <div class="menu-photos" id="dMenuPhotos"></div>
+        <ul id="dMenuList"></ul>
+      </div>
       <div class="detail-links" id="dLinks"></div>
     </div>
   </div>
@@ -410,6 +426,13 @@
         <div class="hint">Foto dikompres otomatis sebelum diunggah supaya hemat kuota penyimpanan.</div>
         <div class="photo-previews" id="photoPreviews"></div>
       </div>
+      <div class="field">
+        <label for="fMenuPhotos">Foto menu (opsional, bisa lebih dari satu)</label>
+        <input id="fMenuPhotos" type="file" accept="image/*" multiple />
+        <div class="hint">Potret daftar menunya — berguna banget buat pengunjung.</div>
+        <div class="photo-previews" id="menuPhotoPreviews"></div>
+      </div>
+      <div class="field"><label for="fMenuList">Menu favoritku (opsional, satu per baris)</label><textarea id="fMenuList" style="min-height:80px" placeholder="Nasi goreng gila — 25k&#10;Es kopi susu — 18k"></textarea></div>
       <div class="field"><label><input type="checkbox" id="fPublished" checked style="width:auto;margin-right:6px" />Tampilkan ke publik</label></div>
       <div class="form-msg" id="formMsg"></div>
       <div class="form-actions">
@@ -445,6 +468,8 @@ let map = null, mapLayer = null, pinIcon = null;
 let editingId = null;          // null = tambah baru
 let existingPhotos = [];       // URL foto lama saat edit
 let newPhotoFiles = [];        // File baru yang akan diunggah
+let existingMenuPhotos = [];   // URL foto menu lama saat edit
+let newMenuPhotoFiles = [];    // File foto menu baru
 let detailPhotoIdx = 0, detailPhotoList = [];
 
 const $ = (id) => document.getElementById(id);
@@ -557,6 +582,7 @@ function render(){
         </div>
         <div class="card-meta">
           <span class="tag">${esc(CAT_LABEL[p.category] || p.category)}</span>
+          ${(Array.isArray(p.menu_photos) && p.menu_photos.length) || p.menu_list ? `<span class="tag menu-tag">menu</span>` : ""}
           ${p.price_range ? `<span>${esc(p.price_range)}</span>` : ""}
           ${p.visit_date ? `<span>${esc(fmtDate(p.visit_date))}</span>` : ""}
           ${!p.is_published ? `<span style="color:var(--pink)">● draf</span>` : ""}
@@ -595,6 +621,11 @@ function openDetail(p){
   const tips = (p.tips || "").trim();
   $("dTips").style.display = tips ? "" : "none";
   $("dTipsText").textContent = tips;
+  const menuPhotos = Array.isArray(p.menu_photos) ? p.menu_photos : [];
+  const menuLines = (p.menu_list || "").split("\n").map(s => s.trim()).filter(Boolean);
+  $("dMenu").style.display = (menuPhotos.length || menuLines.length) ? "" : "none";
+  $("dMenuPhotos").innerHTML = menuPhotos.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="foto menu" loading="lazy" /></a>`).join("");
+  $("dMenuList").innerHTML = menuLines.map(l => `<li>${esc(l)}</li>`).join("");
   const gq = encodeURIComponent(`${p.name} ${p.city || ""}`);
   const gmaps = (p.lat && p.lng)
     ? `https://www.google.com/maps?q=${p.lat},${p.lng}`
@@ -662,6 +693,8 @@ function openForm(p){
   editingId = p ? p.id : null;
   existingPhotos = p && Array.isArray(p.photos) ? [...p.photos] : [];
   newPhotoFiles = [];
+  existingMenuPhotos = p && Array.isArray(p.menu_photos) ? [...p.menu_photos] : [];
+  newMenuPhotoFiles = [];
   $("formTitle").textContent = p ? "Edit tempat" : "Tambah tempat";
   $("fName").value = p ? p.name : "";
   $("fCity").value = p ? p.city : "";
@@ -675,8 +708,11 @@ function openForm(p){
   $("fLng").value = p && p.lng != null ? p.lng : "";
   $("fPublished").checked = p ? !!p.is_published : true;
   $("fPhotos").value = "";
+  $("fMenuPhotos").value = "";
+  $("fMenuList").value = p ? (p.menu_list || "") : "";
   $("formMsg").textContent = "";
   renderPhotoPreviews();
+  renderMenuPreviews();
   openModal("formModal");
 }
 
@@ -685,29 +721,36 @@ $("fPhotos").addEventListener("change", () => {
   $("fPhotos").value = "";
   renderPhotoPreviews();
 });
+$("fMenuPhotos").addEventListener("change", () => {
+  newMenuPhotoFiles = newMenuPhotoFiles.concat(Array.from($("fMenuPhotos").files));
+  $("fMenuPhotos").value = "";
+  renderMenuPreviews();
+});
 
-function renderPhotoPreviews(){
-  const box = $("photoPreviews");
+function renderPreviewsInto(boxId, existingArr, newArr){
+  const box = $(boxId);
   box.innerHTML = "";
-  existingPhotos.forEach((url, i) => {
+  existingArr.forEach((url, i) => {
     const d = document.createElement("div");
     d.className = "pv";
     d.innerHTML = `<img src="${esc(url)}" alt="" /><button title="Hapus foto">✕</button>`;
-    d.querySelector("button").addEventListener("click", () => { existingPhotos.splice(i, 1); renderPhotoPreviews(); });
+    d.querySelector("button").addEventListener("click", () => { existingArr.splice(i, 1); renderPreviewsInto(boxId, existingArr, newArr); });
     box.appendChild(d);
   });
-  newPhotoFiles.forEach((f, i) => {
+  newArr.forEach((f, i) => {
     const d = document.createElement("div");
     d.className = "pv";
     const img = document.createElement("img");
     img.src = URL.createObjectURL(f);
     const b = document.createElement("button");
     b.textContent = "✕"; b.title = "Hapus foto";
-    b.addEventListener("click", () => { newPhotoFiles.splice(i, 1); renderPhotoPreviews(); });
+    b.addEventListener("click", () => { newArr.splice(i, 1); renderPreviewsInto(boxId, existingArr, newArr); });
     d.appendChild(img); d.appendChild(b);
     box.appendChild(d);
   });
 }
+function renderPhotoPreviews(){ renderPreviewsInto("photoPreviews", existingPhotos, newPhotoFiles); }
+function renderMenuPreviews(){ renderPreviewsInto("menuPhotoPreviews", existingMenuPhotos, newMenuPhotoFiles); }
 
 /* Kompres gambar di browser: maks 1600px sisi terpanjang, JPEG 80% */
 function compressImage(file){
@@ -731,9 +774,9 @@ function compressImage(file){
   });
 }
 
-async function uploadPhotos(){
+async function uploadFiles(files){
   const urls = [];
-  for (const f of newPhotoFiles) {
+  for (const f of files) {
     const blob = await compressImage(f);
     const path = `${crypto.randomUUID()}.jpg`;
     const { error } = await sb.storage.from(CONFIG.BUCKET).upload(path, blob, { contentType: "image/jpeg" });
@@ -760,7 +803,8 @@ $("saveBtn").addEventListener("click", async () => {
   const btn = $("saveBtn");
   btn.disabled = true; btn.textContent = "Menyimpan…";
   try {
-    const uploaded = await uploadPhotos();
+    const uploaded = await uploadFiles(newPhotoFiles);
+    const menuUploaded = await uploadFiles(newMenuPhotoFiles);
     const row = {
       name, city,
       category: $("fCat").value,
@@ -771,6 +815,8 @@ $("saveBtn").addEventListener("click", async () => {
       tips: $("fTips").value.trim() || null,
       lat, lng,
       photos: existingPhotos.concat(uploaded),
+      menu_photos: existingMenuPhotos.concat(menuUploaded),
+      menu_list: $("fMenuList").value.trim() || null,
       is_published: $("fPublished").checked
     };
     const q = editingId
