@@ -328,8 +328,12 @@
 
   /* ---- Mobile: form layar penuh + font 16px agar iOS tidak auto-zoom ---- */
   @media(max-width:640px){
-    .modal{padding:0;align-items:stretch}
-    .modal-box{max-width:100%;width:100%;min-height:100dvh;border-radius:0}
+    .modal{padding:0}
+    .modal-box{
+      max-width:100%;width:100%;border-radius:0;
+      height:100vh;height:100dvh;
+      overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+    }
     .form-body{padding:16px}
     .field input,.field select,.field textarea{font-size:16px}
     .search input{font-size:16px}
