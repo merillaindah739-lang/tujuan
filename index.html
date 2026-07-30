@@ -326,6 +326,12 @@
   #pickMap{height:220px;border-radius:10px;border:1px solid var(--line);margin-top:8px}
   .map-err{padding:28px 20px;color:var(--pink);font-size:14px;font-weight:500;line-height:1.7}
 
+  /* ---- Wishlist ---- */
+  .wish-badge{color:var(--pink);font-size:11px;font-weight:700}
+  .wish-mark{color:var(--pink);font-weight:700;font-size:15px}
+  .wish-tag{background:var(--pink-soft);color:var(--pink)}
+  .photo-pin.wish{outline-style:dashed}
+
   /* ---- Mobile: form layar penuh + font 16px agar iOS tidak auto-zoom ---- */
   @media(max-width:640px){
     .modal{padding:0}
@@ -370,6 +376,11 @@
         <button data-cat="wisata">Wisata</button>
         <button data-cat="kafe">Kafe</button>
         <button data-cat="kuliner">Kuliner</button>
+      </div>
+      <div class="seg" id="statusSeg" role="group" aria-label="Filter status">
+        <button data-status="" class="active">Semua</button>
+        <button data-status="visited">✓ Didatangi</button>
+        <button data-status="wishlist">☆ Wishlist</button>
       </div>
       <select class="sortsel" id="sortSel" aria-label="Urutkan">
         <option value="new">Terbaru</option>
@@ -444,6 +455,15 @@
     <button class="modal-close" data-close="formModal" aria-label="Tutup">✕</button>
     <div class="form-body">
       <h2 id="formTitle">Tambah tempat</h2>
+      <div class="frow">
+        <div class="field"><label for="fStatus">Status *</label>
+          <select id="fStatus">
+            <option value="visited">✓ Sudah didatangi</option>
+            <option value="wishlist">☆ Wishlist — mau didatangi</option>
+          </select>
+        </div>
+        <div class="field"><label for="fSource">Link konten (opsional)</label><input id="fSource" type="url" placeholder="Link TikTok / IG / YouTube" /></div>
+      </div>
       <div class="field">
         <label>Lokasi tempat</label>
         <button type="button" class="btn ghost" id="gpsBtn" style="width:100%;font-size:13px;padding:9px 12px">📍 Deteksi lokasi saya sekarang</button>
@@ -526,7 +546,7 @@ const CONFIG = {
 let sb = null;
 let session = null;
 let allPlaces = [];
-let filter = { q: "", cat: "", city: "", sort: "new" };
+let filter = { q: "", cat: "", city: "", sort: "new", status: "" };
 let map = null, mapLayer = null, pinIcon = null;
 let currentView = "list";
 let editingId = null;          // null = tambah baru
@@ -584,9 +604,11 @@ async function loadPlaces(){
   allPlaces = data || [];
   buildCityChips();
   render();
-  const cities = new Set(allPlaces.filter(p => p.is_published).map(p => p.city));
-  const pub = allPlaces.filter(p => p.is_published).length;
-  $("statPill").innerHTML = `<b>${pub}</b> tempat · <b>${cities.size}</b> kota`;
+  const pub = allPlaces.filter(p => p.is_published);
+  const vis = pub.filter(p => (p.status || "visited") !== "wishlist").length;
+  const wish = pub.filter(p => (p.status || "visited") === "wishlist").length;
+  const cities = new Set(pub.map(p => p.city));
+  $("statPill").innerHTML = `<b>${vis}</b> didatangi · <b>${wish}</b> wishlist · <b>${cities.size}</b> kota`;
 }
 
 function buildCityChips(){
@@ -609,6 +631,7 @@ function buildCityChips(){
 function filteredPlaces(){
   let list = allPlaces.filter(p => session ? true : p.is_published);
   if (filter.cat)  list = list.filter(p => p.category === filter.cat);
+  if (filter.status) list = list.filter(p => (p.status || "visited") === filter.status);
   if (filter.city) list = list.filter(p => (p.city || "").trim() === filter.city);
   if (filter.q) {
     const q = filter.q.toLowerCase();
@@ -636,15 +659,16 @@ function render(){
   grid.innerHTML = "";
   $("emptyState").style.display = list.length ? "none" : "";
   list.forEach(p => {
+    const isWish = (p.status || "visited") === "wishlist";
     const row = document.createElement("article");
     row.className = "row-item";
     row.tabIndex = 0;
     row.innerHTML = `
       <div class="row-main">
-        <div class="row-name">${esc(p.name)}${!p.is_published ? ` <span class="draf">● draf</span>` : ""}</div>
-        <div class="row-sub">${esc(p.city || "")} · ${esc(CAT_LABEL[p.category] || p.category)}${p.visit_date ? " · " + esc(fmtDate(p.visit_date)) : ""}</div>
+        <div class="row-name">${esc(p.name)}${isWish ? ` <span class="wish-badge">☆ wishlist</span>` : ""}${!p.is_published ? ` <span class="draf">● draf</span>` : ""}</div>
+        <div class="row-sub">${esc(p.city || "")} · ${esc(CAT_LABEL[p.category] || p.category)}${!isWish && p.visit_date ? " · " + esc(fmtDate(p.visit_date)) : ""}</div>
       </div>
-      <span class="rating">${stars(p.rating || 0)}</span>
+      <span class="rating">${isWish ? '<span class="wish-mark">☆</span>' : stars(p.rating || 0)}</span>
       ${session ? `<span class="row-actions">
           <button class="mini-btn" data-act="edit">Edit</button>
           <button class="mini-btn danger" data-act="del">Hapus</button>
@@ -667,12 +691,14 @@ function openDetail(p){
   detailPhotoIdx = 0;
   renderDetailPhoto(p);
   $("dName").textContent = p.name;
+  const isWish = (p.status || "visited") === "wishlist";
   $("dMeta").innerHTML = `
+    ${isWish ? `<span class="tag wish-tag">☆ Wishlist</span>` : ""}
     <span class="tag">${esc(CAT_LABEL[p.category] || p.category)}</span>
     <span>${esc(p.city || "")}</span>
     ${p.price_range ? `<span>· ${esc(p.price_range)}</span>` : ""}
-    <span>· <b style="color:var(--pink)">${stars(p.rating || 0)}</b></span>
-    ${p.visit_date ? `<span>· dikunjungi ${esc(fmtDate(p.visit_date))}</span>` : ""}`;
+    ${!isWish ? `<span>· <b style="color:var(--pink)">${stars(p.rating || 0)}</b></span>` : ""}
+    ${!isWish && p.visit_date ? `<span>· dikunjungi ${esc(fmtDate(p.visit_date))}</span>` : ""}`;
   $("dReview").textContent = p.review || "";
   const tips = (p.tips || "").trim();
   $("dTips").style.display = tips ? "" : "none";
@@ -686,7 +712,9 @@ function openDetail(p){
   const gmaps = (p.lat && p.lng)
     ? `https://www.google.com/maps?q=${p.lat},${p.lng}`
     : `https://www.google.com/maps/search/?api=1&query=${gq}`;
-  $("dLinks").innerHTML = `<a class="btn" href="${gmaps}" target="_blank" rel="noopener">Buka di Google Maps ↗</a>`;
+  $("dLinks").innerHTML = `
+    ${p.source_url ? `<a class="btn ghost" href="${esc(p.source_url)}" target="_blank" rel="noopener">🎬 Tonton konten ↗</a>` : ""}
+    <a class="btn" href="${gmaps}" target="_blank" rel="noopener">Buka di Google Maps ↗</a>`;
   openModal("detailModal");
 }
 function renderDetailPhoto(p){
@@ -733,14 +761,17 @@ function renderMapInner(){
   mapLayer.clearLayers();
   const pts = filteredPlaces().filter(p => p.lat && p.lng);
   pts.forEach(p => {
+    const isWish = (p.status || "visited") === "wishlist";
     const photos = Array.isArray(p.photos) ? p.photos : [];
     const icon = photos[0]
       ? L.divIcon({
           className: "",
-          html: `<div class="photo-pin"><img src="${esc(photos[0])}" alt="" /></div>`,
+          html: `<div class="photo-pin${isWish ? " wish" : ""}"><img src="${esc(photos[0])}" alt="" /></div>`,
           iconSize: [46, 46], iconAnchor: [23, 23], popupAnchor: [0, -26]
         })
-      : pinIcon;
+      : (isWish
+          ? L.divIcon({ className: "", html: '<div style="width:18px;height:18px;border-radius:50%;background:#fff;border:3px dashed #F62477;box-shadow:0 1px 5px rgba(6,59,0,.45)"></div>', iconSize: [18, 18], iconAnchor: [9, 9] })
+          : pinIcon);
     const m = L.marker([p.lat, p.lng], { icon }).addTo(mapLayer);
     m.on("click", () => {
       map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 16), { duration: 0.9 });
@@ -749,9 +780,9 @@ function renderMapInner(){
       <div class="map-pop">
         ${photos[0] ? `<img class="map-pop-img" src="${esc(photos[0])}" alt="${esc(p.name)}" />` : ""}
         <div class="map-pop-body">
-          <div class="map-pop-tags"><span class="tag">${esc(CAT_LABEL[p.category] || p.category)}</span>${p.price_range ? `<span class="map-pop-price">${esc(p.price_range)}</span>` : ""}</div>
+          <div class="map-pop-tags">${isWish ? `<span class="tag wish-tag">☆ Wishlist</span>` : ""}<span class="tag">${esc(CAT_LABEL[p.category] || p.category)}</span>${p.price_range ? `<span class="map-pop-price">${esc(p.price_range)}</span>` : ""}</div>
           <div class="map-pop-name">${esc(p.name)}</div>
-          <div class="map-pop-meta">${esc(p.city || "")} · <span class="map-pop-rating">${stars(p.rating || 0)}</span></div>
+          <div class="map-pop-meta">${esc(p.city || "")}${!isWish ? ` · <span class="map-pop-rating">${stars(p.rating || 0)}</span>` : ""}</div>
           <button class="map-pop-btn" type="button">Lihat detail</button>
         </div>
       </div>`, { minWidth: 200, maxWidth: 220 });
@@ -866,6 +897,8 @@ function openForm(p){
   existingMenuPhotos = p && Array.isArray(p.menu_photos) ? [...p.menu_photos] : [];
   newMenuPhotoFiles = [];
   $("formTitle").textContent = p ? "Edit tempat" : "Tambah tempat";
+  $("fStatus").value = p ? (p.status || "visited") : "visited";
+  $("fSource").value = p ? (p.source_url || "") : "";
   $("fName").value = p ? p.name : "";
   $("fCity").value = p ? p.city : "";
   $("fCat").value = p ? p.category : "wisata";
@@ -964,7 +997,9 @@ $("saveBtn").addEventListener("click", async () => {
   const name = $("fName").value.trim();
   const city = $("fCity").value.trim();
   const review = $("fReview").value.trim();
-  if (!name || !city || !review) { msg.textContent = "Nama, kota, dan ulasan wajib diisi."; return; }
+  const status = $("fStatus").value;
+  if (!name || !city) { msg.textContent = "Nama dan kota wajib diisi."; return; }
+  if (status === "visited" && !review) { msg.textContent = "Ulasan wajib diisi untuk tempat yang sudah didatangi."; return; }
   const lat = formLat, lng = formLng;
 
   const btn = $("saveBtn");
@@ -974,11 +1009,13 @@ $("saveBtn").addEventListener("click", async () => {
     const menuUploaded = await uploadFiles(newMenuPhotoFiles);
     const row = {
       name, city,
+      status,
+      source_url: $("fSource").value.trim() || null,
       category: $("fCat").value,
       rating: parseFloat($("fRating").value),
       price_range: $("fPrice").value || null,
       visit_date: $("fDate").value || null,
-      review,
+      review: review || null,
       tips: $("fTips").value.trim() || null,
       lat, lng,
       photos: existingPhotos.concat(uploaded),
@@ -1017,6 +1054,12 @@ document.querySelectorAll("#catSeg button").forEach(b => b.addEventListener("cli
   document.querySelectorAll("#catSeg button").forEach(x => x.classList.remove("active"));
   b.classList.add("active");
   filter.cat = b.dataset.cat;
+  render();
+}));
+document.querySelectorAll("#statusSeg button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#statusSeg button").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  filter.status = b.dataset.status;
   render();
 }));
 $("viewGridBtn").addEventListener("click", () => {
